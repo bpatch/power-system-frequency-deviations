@@ -222,6 +222,9 @@ for sigma in rangeSigmaValues:
 plt.figure(figsize = (5,4))
 sns.heatmap(rateFunData, cmap="PiYG")
 #tikzplotlib.save("Ex2_RateVals.tex")
+plt.figure(figsize = (5,4))
+
+sns.heatmap(pStarData, cmap="PiYG")
 
 fig = plt.figure()
 sns.heatmap(optNumberFailsData,xticklabels = rangeArrivalsValues, yticklabels = rangeSigmaValues[::-1], square = True, cmap="PiYG")
