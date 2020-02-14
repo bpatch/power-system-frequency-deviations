@@ -3,7 +3,7 @@ Author: Brendan Patch
 
 Date: 14 Feb 2020
 
-Purpose: Experiment 1 in the paper 'Analyzing large frequency disruptions in power
+Purpose: Experiment 2 in the paper 'Analyzing large frequency disruptions in power
 systems using large deviations theory' by Brendan Patch and Bert Zwart
 
 Notes: 
