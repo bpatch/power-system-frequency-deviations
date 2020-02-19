@@ -190,7 +190,7 @@ for mu in rangeInertiaValues:
             wind = 0
         else:
             foo = expm(A*time).dot(y0)
-            wind = abs(mu*foo.item(2)+alpha*foo.item(1)+beta*foo.item(0)+delta*optNumberFails)
+            wind = mu*foo.item(2)+alpha*foo.item(1)+beta*foo.item(0)+delta*optNumberFails
         return wind
         
     pStar = renewable_power(planningHorizon)
