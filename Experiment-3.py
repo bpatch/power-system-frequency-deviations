@@ -1,7 +1,7 @@
 """
 Author: Brendan Patch
 
-Date: 14 Feb 2020
+Date: 22 Feb 2020
 
 Purpose: Experiment 3 in the paper 'Analyzing large frequency disruptions in power
 systems using large deviations theory' by Brendan Patch and Bert Zwart
@@ -15,41 +15,48 @@ get_ipython().magic('reset -sf')
 import numpy as np
 from scipy.linalg import expm
 from scipy.optimize import minimize
-import math
 import matplotlib.pyplot as plt
-#import tikzplotlib
+import math
+#import tikzplotlib  #Uncomment to allow nicer plots to be created
 
-numberFailuresMax = 2
-rangeNumberFailures = range(numberFailuresMax+1)
 
-rho = 1/30
-alpha = 12.5
-mu = 12
-beta = 0.05
-delta = 1
-planningHorizon = 2.0
-gamma = 0.05
-sigma = 0.29162277660168384
-arrivalRate = 1/10**3
-numberFails = 1
-epsilon=0.1
-
+# These are the values of inertia we investigate
 inertiaMin = 2
-inertiaMax = 20
+inertiaMax = 15
 inertiaStep = 0.1
 rangeInertiaValues = np.arange(inertiaMin,inertiaMax,inertiaStep)
 
-A_deterministic = np.array([[1/mu,1], [-beta/mu, -alpha/mu]])
+
+# Set experiment parameters
+rho = 1/30
+alpha = 12.5
+mu = 12 
+beta = 0.05
+delta = 1
+planningHorizon = 2.0
+sigma = 0.2916
+arrivalRate = 1/10**3
+epsilon=0.1
+
+timeStep = 0.01
+tt = np.arange(0,planningHorizon+timeStep, timeStep)
+
+# Determining the nadir from failure without wind
+
+numberFails = 1
+
+A_deterministic = np.array([[0,1], [-beta/mu, -alpha/mu]])
 b_deterministic = np.array([[0],[delta*numberFails/mu]])
 C1_deterministic = np.concatenate((A_deterministic,b_deterministic),axis=1)
 C2_deterministic = np.concatenate((np.zeros((1,2)),np.zeros((1,1))),axis=1)
 C_deterministic = np.concatenate((C1_deterministic, C2_deterministic), axis=0)
 
-tt = np.arange(0,planningHorizon+0.01,0.01)
 oneFail_deterministic_sample_path = []
 for time in tt:
     foo = -np.array([0,1,0]).dot(expm(C_deterministic*time))
     oneFail_deterministic_sample_path.append(foo[2])
+
+# Determining the nadir from two failures without wind
 
 numberFails = 2
 
@@ -63,190 +70,143 @@ for time in tt:
     foo = -np.array([0,1,0]).dot(expm(C_deterministic*time))
     twoFail_deterministic_sample_path.append(foo[2])
     
+# Set the nadir level corresponding to that which occurs from two failures without wind
+    
 gamma = -min(twoFail_deterministic_sample_path)
-#print(gamma)
-
-c1 = 0.0
-c2 = 0.0
-c3 = 0.0
-t = planningHorizon/3.0
 
 
-probApproxDataInertia = []
+# Optimising over time of nadir and number of failures, with failures at time 0
+
+maxK = 5
+
+# Initialise optimal rate fun (to be made smaller over k and nadir time loops)
+optVal = math.inf
+
+# Initial conditions for minimize function later
+c1 = 1
+c2 = 1
+c3 = 1
+cInitial = np.array([[c1], [c2], [c3]])
+
+
+# Set up counters for progress indicator
+counter1Max = maxK
+counter2Max = tt.size
+counter3Max = rangeInertiaValues.size
+
+counter3 = 0
+
+# Arrays to store results in
 pStarDataInertia = []
 rateFunDataInertia = []
 optNumberFailsDataInertia = []
-detNadirDataInertia = []
-JJFailsDataInertia = []
+optNadirTimeDataInertia = []
+optFailTimeDataInertia = []
+
+
+# Loop over different values of inertia
 for mu in rangeInertiaValues:
-    tempData = []
-    tempData2 = []
-    solutionType = []
-    nadirTime = []
-    
-    deterministicNadir = 0
-    numberFails_JJ = 0.0
-
-    while deterministicNadir > -gamma:
-        numberFails_JJ += 1.0
-        b_deterministic = np.array([[0],[delta*numberFails_JJ/mu]])
-        C1_deterministic = np.concatenate((A_deterministic,b_deterministic),axis=1)
-        C2_deterministic = np.concatenate((np.zeros((1,2)),np.zeros((1,1))),axis=1)
-        C_deterministic = np.concatenate((C1_deterministic, C2_deterministic), axis=0)
+    # Optimise over k and nadir time using brute force:
+    counter1 = 0
+    for k in range(maxK):
         
-        deterministic_sample_path = []
-        for time in tt:
-            foo = -np.array([0,1,0]).dot(expm(C_deterministic*time))
-            deterministic_sample_path.append(foo[2])
+        counter2 = 0
+        for nadirTime in tt:
+       
+            h1 = beta*rho
+            h2 = beta+rho*alpha
+            h3 = alpha+rho*mu
+            h4 = mu
+            h8 = rho*delta*k
+                
+            H = np.array([[h1**2,h1*h2, h1*h3, h1*h4, 0, 0, 0, h1*h8], 
+                       [h2*h1, h2**2, h2*h3, h2*h4, 0, 0, 0, h2*h8], 
+                       [h3*h1, h3*h2, h3**2, h3*h4, 0, 0, 0, h3*h8], 
+                       [h4*h1, h4*h2, h4*h3, h4**2, 0, 0, 0, h4*h8], 
+                       [0,0,0,0,0,0,0,0], 
+                       [0,0,0,0,0,0,0,0],
+                       [0,0,0,0,0,0,0,0],
+                       [h8*h1, h8*h2, h8*h3, h8*h4, 0, 0, 0, h8*h8]])
             
-        deterministicNadir = min(deterministic_sample_path)
-    detNadirDataInertia.append(deterministicNadir)
-    JJFailsDataInertia.append(numberFails_JJ)
+            H1 = H[0:7,0:7]
+            
+            H2 = H[0:7,-1].reshape(-1,1)
+            
+            a1 = beta**2*rho**2/mu**2
+            a2 = (2*beta*rho**2*mu-beta**2-alpha**2*rho**2)/mu**2
+            a3 = (alpha**2+rho**2*mu**2-2*mu*beta)/mu**2
+            
+            A1 = np.array([a1, 0, a2, 0, a3, 0])
+            
+            A = np.hstack((np.zeros((7,1)), np.vstack((np.identity(6), A1))))
+            
+            dummyMatrix1 = expm(  np.vstack( (np.hstack((-np.transpose(A), H1))  , np.hstack((np.zeros((7,7)), A))) ) * planningHorizon )
+            
+            dummyMatrix2 = expm(  np.vstack( (np.hstack((0, np.transpose(H2)[0]))  , np.hstack((np.zeros((7,1)), A))) ) * planningHorizon )
+            
+            dummyMatrix3 = expm( np.vstack( (np.hstack((-np.transpose(A), H2))  , np.zeros((1,8)) )) * planningHorizon )
+            
+            B11 = dummyMatrix1[0:7, 7:]
+            
+            B12 = dummyMatrix1[7:,7:]
+            
+            B1 = np.dot(np.transpose(B12),B11)
+            
+            B2 = dummyMatrix2[0,1:]
+            
+            B31 = dummyMatrix3[:7,-1].reshape(-1,1)
+            
+            B3 = np.dot(np.transpose(B12), B31)
+            
+            def objective(c):
+                y0 = np.array([0, 0, -delta*k/mu,  c[0], c[1], c[2], -k*delta*a2/mu+a3*c[2]+beta*rho**2*delta*k/mu**2])
+                integralValue = 0.5*(np.linalg.multi_dot([np.transpose(y0), B1, y0]) +np.dot(B2, y0) + np.dot(np.transpose(y0),B3)+(rho*delta*k)**2)/(sigma**2/epsilon)  
+                return integralValue.item(0)-k*epsilon*np.log(arrivalRate)
+            
+            def constraint(c):
+                y0 = np.array([0, 0, -delta*k/mu,  c[0], c[1], c[2], -k*delta*a2/mu+a3*c[2]+beta*rho**2*delta*k/mu**2])
+                valueAtNadirTime = np.dot(expm(A*nadirTime),y0)
+                return -valueAtNadirTime.item(1)-gamma
+            
+            con = {'type': 'eq', 'fun': constraint}
+            
+            sol = minimize(objective, cInitial, constraints=con, method='SLSQP', options={'disp': False})
+            
+    #        print('k=', k, 'nadir time = ', nadirTime, 'opt rate fun val = ', sol.fun) # Uncomment this line to see rate function values for different k and nadir time combinations       
     
-    a1 = beta**2*rho**2/mu**2
-    a2 = (2*beta*rho**2*mu-beta**2-alpha**2*rho**2)/mu**2
-    a3 = (alpha**2+rho**2*mu**2-2*mu*beta)/mu**2
-    
-    A = np.array([[0,1,0,0,0,0], #1
-              [0,0,1,0,0,0], #2
-              [0,0,0,1,0,0], #3
-              [0,0,0,0,1,0], #4
-              [0,0,0,0,0,1], #5
-              [a1, 0, a2 , 0 ,a3, 0]]) #6
-    
-    b1 = beta*rho
-    b2 = beta+rho*alpha
-    b3 = alpha+rho*mu
-    b4 = mu
-        
-    B = np.array([[b1**2,b1*b2, b1*b3, b1*b4, 0, 0], 
-               [b2*b1, b2**2, b2*b3, b2*b4, 0, 0], 
-               [b3*b1, b3*b2, b3**2, b3*b4, 0, 0], 
-               [b4*b1, b4*b2, b4*b3, b4**2, 0, 0], 
-               [0,0,0,0,0,0], 
-               [0,0,0,0,0,0]])
-    
-    C1 = np.concatenate((-np.transpose(A), B), axis=1)
-    C2 = np.concatenate((np.zeros((6,6)),A), axis=1)
-    
-    C = np.concatenate((C1, C2), axis=0)
-    
-    F = expm(C*planningHorizon)
-        
-    G1 = F[0:6,6:12]
-    G2 = F[6:12, 6:12]
-    
-    BT = np.transpose(G2).dot(G1)    
-    
-    
-    for numberFailures in rangeNumberFailures:
-        
-        
-        def objective(c):
-            y0 = np.array([[0], [0], [-delta*numberFailures/mu],  [c[0]], [c[1]], [c[2]]])
-            foo = (0.5*(np.transpose(y0).dot(BT.dot(y0)))/(sigma**2/epsilon))-numberFailures*epsilon*math.log(arrivalRate)            
-            return foo.item(0)
-        
-        def constraint(c):
-            y0 = np.array([[0], [0], [-delta*numberFailures/mu], [c[0]], [c[1]], [c[2]]])
-            foo = expm(A*planningHorizon).dot(y0)
-            return -foo.item(1)-gamma
-    
-        con = {'type': 'eq', 'fun': constraint}
-        
-        cInitial = np.array([[c1], [c2], [c3]])
-              
-        
+            if sol.fun < optVal:
+                optNadirTime = nadirTime
+                optK = k
+                optVal = sol.fun
+                optSolx = sol.x
+                optSol = sol
+                optInertia = mu
+            cInitial = sol.x
+            counter2 += 1
+            print(format(100*(counter2 + counter1*counter2Max + counter3*counter1Max*counter2Max)/(counter1Max*counter2Max*counter3Max), '7.2f'), '%')
+        counter1 += 1
+    y0 = np.array([0, 0, - delta*optK/mu,  optSolx[0], optSolx[1], optSolx[2], -optK*delta*a2/mu+a3*optSolx[2]+beta*rho**2*delta*optK/mu**2])
+    np.dot(expm(A*planningHorizon), y0)
+    pStarDataInertia.append(mu*foo.item(2)+alpha*foo.item(1)+beta*foo.item(0)+delta*optK)
+    rateFunDataInertia.append(optVal)
+    optNumberFailsDataInertia.append(optK)
+    optNadirTimeDataInertia.append(optNadirTime)
+    counter3 += 1
 
-        sol = minimize(objective, cInitial, constraints=con, method='SLSQP',options={'disp': False})
-        
-        tempData2.append(sol.x)
-        
-        optVal1 = sol.fun
-        tempData.append(optVal1)
-
-    optimalNumberFailures_JSNE = np.argmin(tempData)
-    cOpt_JSNE = tempData2[optimalNumberFailures_JSNE]
-    optVal_JSNE = tempData[optimalNumberFailures_JSNE]
-    optSolType_JSNE = tempData[optimalNumberFailures_JSNE]
-    
-    optVal_JJ = -numberFails_JJ*epsilon*math.log(arrivalRate)
-    
-    optVals = [optVal_JJ, optVal_JSNE]
-    optNumberFails = [numberFails_JJ, optimalNumberFailures_JSNE]
-    
-    optSolMethod = np.argmin(optVals)
-    
-    optNumberFails = optNumberFails[optSolMethod]
-    
-    if optSolMethod == 0:
-        y0 = np.zeros((6,1))
-        y0[2] = -2*delta/mu
-    else:
-        y0 = np.array([[0], [0], [-delta*optNumberFails/mu], [cOpt_JSNE[0]], [cOpt_JSNE[1]], [cOpt_JSNE[2]]])
-
-    def renewable_power(time):
-        if optSolMethod == 0:
-            wind = 0
-        else:
-            foo = expm(A*time).dot(y0)
-            wind = mu*foo.item(2)+alpha*foo.item(1)+beta*foo.item(0)+delta*optNumberFails
-        return wind
-        
-    pStar = renewable_power(planningHorizon)
-
-    probApproxDataInertia.append(math.exp(-min(optVals)/epsilon))
-    pStarDataInertia.append(pStar)
-    rateFunDataInertia.append(min(optVals))
-    optNumberFailsDataInertia.append(optNumberFails)
-    print(int(100*mu/inertiaMax), '%')
-    
-pStarDataInertia2 = np.array(pStarDataInertia)
-pStarDataInertia3 = np.array(pStarDataInertia)
-pStarDataInertia2 = np.insert(pStarDataInertia2,0,pStarDataInertia2[0])
-pStarDataInertia3[abs(np.diff(pStarDataInertia2))>0.03] = np.nan
-
-rateFunDataInertia2 = np.array(rateFunDataInertia)
-rateFunDataInertia3 = np.array(rateFunDataInertia)
-rateFunDataInertia2 = np.insert(rateFunDataInertia2,0,rateFunDataInertia2[0])
-rateFunDataInertia3[abs(np.diff(rateFunDataInertia2))>0.2] = np.nan
-
-JJFailsDataInertia2 = np.array(JJFailsDataInertia)
-JJFailsDataInertia3 = np.array(JJFailsDataInertia)
-JJFailsDataInertia2 = np.insert(JJFailsDataInertia2,0,JJFailsDataInertia2[0])
-JJFailsDataInertia3[abs(np.diff(JJFailsDataInertia2))>0.5] = np.nan
-
-optNumberFailsDataInertia2 = np.array(optNumberFailsDataInertia)
-optNumberFailsDataInertia3 = np.array(optNumberFailsDataInertia)
-optNumberFailsDataInertia2 = np.insert(optNumberFailsDataInertia2,0,optNumberFailsDataInertia2[0])
-optNumberFailsDataInertia3[abs(np.diff(optNumberFailsDataInertia2))>0.5] = np.nan
-
-detNadirDataInertia2 = np.array(detNadirDataInertia)
-detNadirDataInertia3 = np.array(detNadirDataInertia)
-detNadirDataInertia2 = np.insert(detNadirDataInertia2,0,optNumberFailsDataInertia2[0])
-detNadirDataInertia3[abs(np.diff(detNadirDataInertia2))>0.03] = np.nan
-
+### Plot results
 
 fig, ax1 = plt.subplots()
 ax1.set_xlabel('mu')
-ax1.plot(range(len(rateFunDataInertia3)),rateFunDataInertia3,color="black")
+ax1.plot(rangeInertiaValues,rateFunDataInertia,color="black")
 ax1.set_ylabel('J')
-ax2 = ax1.twinx()
-ax2.set_xlabel('mu')
-ax2.plot(range(len(detNadirDataInertia3)),detNadirDataInertia3,color="blue",linestyle='dotted')
-ax2.set_ylabel('gamma-')
-
 #tikzplotlib.save("Ex3_Inertia1v2.tex")
 
 fig, ax3 = plt.subplots()
 
-ax3.plot(range(len(pStarDataInertia3)),pStarDataInertia3,color="black")
-ax3.set_ylabel('p*(T)', color="black")
+ax3.plot(rangeInertiaValues,pStarDataInertia,color="red")
+ax3.set_ylabel('p*(T)', color="red")
 ax4 = ax3.twinx()
-ax4.plot(range(len(JJFailsDataInertia3)),JJFailsDataInertia3,color="blue", linestyle='dotted')
-ax4.plot(range(len(optNumberFailsDataInertia3)),optNumberFailsDataInertia3,color="orange",linestyle='dashed')
-ax4.set_ylabel('k*', color="green")
+ax4.plot(rangeInertiaValues,optNumberFailsDataInertia,color="blue",linestyle='dashed')
+ax4.set_ylabel('k*', color="blue")
 #tikzplotlib.save("Ex3_Inertia2v2.tex")
-
-ax4.tick_params(axis='y', labelcolor="green")
 
